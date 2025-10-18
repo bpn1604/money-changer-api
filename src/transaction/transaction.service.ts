@@ -1,7 +1,17 @@
+// src/transaction/transaction.service.ts
+
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository, Between, FindOptionsWhere } from 'typeorm';
 import { Transaction } from '../user/entities/transaction.entity';
+
+export interface PaginatedTransactions { // <-- ADDED 'export'
+    data: Transaction[];
+    total: number;
+    page: number;
+    lastPage: number;
+    limit: number;
+}
 
 @Injectable()
 export class TransactionService {
@@ -10,28 +20,39 @@ export class TransactionService {
     private transactionRepository: Repository<Transaction>,
   ) {}
 
-  // --- Feature 3: Get Transaction List ---
+  
   async getHistory(
     userId: number,
     startDate?: Date,
     endDate?: Date,
-  ): Promise<Transaction[]> {
-    const whereClause: any = { userId };
+    page: number = 1,  
+    limit: number = 10, // <--- Dynamic value from controller
+  ): Promise<PaginatedTransactions> {
+    
+   
+    const whereClause: FindOptionsWhere<Transaction> = { userId };
+    
+   
+    const skip = (page - 1) * limit; 
 
-    if (startDate && endDate) {
-      // Add one day to endDate to include transactions from that day up to midnight
-      const inclusiveEndDate = new Date(endDate);
-      inclusiveEndDate.setDate(inclusiveEndDate.getDate() + 1);
-
-      whereClause.transactionDate = Between(startDate, inclusiveEndDate);
-    } else if (startDate) {
-      whereClause.transactionDate = Between(startDate, new Date());
-    }
-
-    // Default: return all transactions for the user
-    return this.transactionRepository.find({
+    
+    const [data, total] = await this.transactionRepository.findAndCount({
       where: whereClause,
       order: { transactionDate: 'DESC' },
+      // The `take` property uses the dynamic `limit` value:
+      take: limit, 
+      skip: skip,  
     });
+
+    // --- Return Paginated Response (omitted for brevity) ---
+    // ...
+    
+    return {
+      data,
+      total,
+      page,
+      lastPage: Math.ceil(total / limit),
+      limit,
+    };
   }
 }
